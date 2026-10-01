@@ -27,6 +27,7 @@ VENDOR_NAME = "flashtool_jp7.2_GA_r1.0_20260722"
 ROOTFS_NAME = "Tegra_Linux_Sample-Root-Filesystem_R39.2.0_aarch64.tbz2"
 # SHA-256 архива, полученного с указанного HTTPS URL; это не подпись NVIDIA.
 ROOTFS_SHA256 = "3e3e4c110dc911efcaee44fffe405d355341f4d5a169b2516bf4330f846d2037"
+DOWNLOAD_LIMIT_SECONDS = 2 * 60 * 60
 ROOTFS_URL = (
     "https://developer.nvidia.com/downloads/embedded/L4T/r39_Release_v2.0/"
     "release/Tegra_Linux_Sample-Root-Filesystem_R39.2.0_aarch64.tbz2"
@@ -1004,16 +1005,24 @@ def download_rootfs(dest: Path, progress: Callable[[str], None]) -> Path:
         validate_rootfs(dest)
         return dest
     progress(f"Скачивание {ROOTFS_NAME}…")
+    progress("Лимит загрузки — 2 часа. В полном ZIP rootfs уже есть; повторная загрузка обычно не нужна.")
+    started = time.monotonic()
+    last_report = started - 5
     last_error: Optional[BaseException] = None
     max_attempts = 20
     for attempt in range(1, max_attempts + 1):
+        attempt_started = time.monotonic()
+        downloaded = 0
+        remaining_time = DOWNLOAD_LIMIT_SECONDS - (attempt_started - started)
+        if remaining_time <= 0:
+            raise RecoveryError("Лимит загрузки 2 часа исчерпан. Файл .part сохранён; прошивка не начата.")
         offset = part.stat().st_size if part.exists() else 0
         headers = {"User-Agent": "GEACX1-Recovery/1.0"}
         if offset:
             headers["Range"] = f"bytes={offset}-"
         request = urllib.request.Request(ROOTFS_URL, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=min(60, remaining_time)) as response:
                 final_url = response.geturl()
                 if urllib.parse.urlparse(final_url).scheme.lower() != "https":
                     raise RecoveryError(f"Загрузка перенаправлена не на HTTPS: {final_url}")
@@ -1048,12 +1057,30 @@ def download_rootfs(dest: Path, progress: Callable[[str], None]) -> Path:
                 with part.open(mode) as output:
                     received = offset
                     while True:
-                        chunk = response.read(1024 * 1024)
+                        # read1 returns available data instead of waiting for a full MiB
+                        # on a slow server. Network inactivity is bounded by socket timeout.
+                        chunk = response.read1(1024 * 1024)
+                        now = time.monotonic()
+                        elapsed = now - started
+                        if elapsed >= DOWNLOAD_LIMIT_SECONDS:
+                            raise RecoveryError("Лимит загрузки 2 часа исчерпан. Файл .part сохранён; прошивка не начата.")
                         if not chunk:
                             break
                         output.write(chunk)
                         received += len(chunk)
-                        progress(f"Скачано {received / 1024**2:.0f} из {total / 1024**2:.0f} MiB")
+                        downloaded += len(chunk)
+                        transfer_elapsed = now - attempt_started
+                        rate = downloaded / max(transfer_elapsed, .001)
+                        eta = max(0, total - received) / rate
+                        if now - last_report >= 5 or received >= total:
+                            progress(f"Скачано {received / 1024**2:.1f} из {total / 1024**2:.1f} MiB · "
+                                     f"{rate / 1024**2:.2f} MiB/с · осталось примерно {eta / 60:.1f} мин")
+                            last_report = now
+                        if transfer_elapsed >= 30 and received < total and elapsed + eta > DOWNLOAD_LIMIT_SECONDS:
+                            raise RecoveryError(
+                                f"По измеренной скорости загрузка превысит 2 часа "
+                                f"(примерно {(elapsed + eta) / 3600:.1f} ч). Загрузка остановлена, "
+                                "файл .part сохранён. Используйте полный ZIP проекта или другую сеть.")
                     output.flush()
                     os.fsync(output.fileno())
                 if part.stat().st_size != total:

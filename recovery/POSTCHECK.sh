@@ -31,6 +31,11 @@ if ! grep -arFq -- 'geac91_510jx0_r3_0_JP7.2_ga_v1.0.0' /proc/device-tree 2>/dev
 fi
 printf '\nПамять (доступный ОС объём меньше номинальных 32 ГБ):\n'; free -h
 printf '\nСистема и накопители:\n'; findmnt /; lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
+printf '\nПроверка /etc/fstab после переноса или восстановления (без изменений):\n'
+if ! findmnt --verify --verbose; then
+    printf '%s\n' 'ВНИМАНИЕ: проверьте UUID из /etc/fstab по lsblk -f; старые UUID могут задерживать загрузку.'
+    printf '%s\n' 'Не удаляйте fstab целиком: исправляйте только установленную причину. Это предупреждение не доказывает неисправность прошивки.'
+fi
 printf '\nПакеты NVIDIA/vendor:\n'
 dpkg-query -W 'nvidia-l4t-core' 'nvidia-jetpack' 'rb-jetson-*' 2>/dev/null || true
 printf '\nНеуспешные службы (часть может быть не связана с прошивкой):\n'
@@ -51,5 +56,6 @@ else
 fi
 printf '\n%s\n' 'Отдельно проверьте Ethernet, HDMI, USB, вентилятор и требуемые камеры/CAN/GPIO.'
 printf '%s\n' 'Отсутствие nvidia-jetpack означает, что вычислительные библиотеки ещё не установлены.'
+printf '%s\n' 'CPLD проверяется отдельно по инструкции своей ревизии; этот скрипт не отправляет команды в UART и не прошивает CPLD.'
 if ((failures)); then printf 'Найдено критичных несоответствий: %s\n' "$failures"; exit 1; fi
 printf '%s\n' 'Базовые проверки пройдены. Это не заменяет проверку всей периферии.'

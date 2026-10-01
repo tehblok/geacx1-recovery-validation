@@ -537,6 +537,80 @@ class DownloadTests(unittest.TestCase):
                 raise OSError("reset")
             return b""
 
+        def read1(self, size):
+            return self.read(size)
+
+    def test_slow_download_stops_without_publishing_or_retrying(self):
+        # A resumed file must not be counted as bytes downloaded in this session.
+        for offset in (0, 90000):
+            with self.subTest(offset=offset), tempfile.TemporaryDirectory() as tmp:
+                clock = [0.0]
+                response = self.Response(b'x', status=206 if offset else 200,
+                    headers={'Content-Length': str(100000-offset),
+                             'Content-Range': f'bytes {offset}-99999/100000'})
+                read = response.read
+                def slow_read(size):
+                    clock[0] += 31
+                    return read(size)
+                response.read1 = slow_read
+                response.read = slow_read
+                dest = Path(tmp) / core.ROOTFS_NAME
+                part = dest.with_name(dest.name + '.part')
+                part.write_bytes(b'p' * offset)
+                with mock.patch.object(core.time, 'monotonic', side_effect=lambda: clock[0]), \
+                     mock.patch.object(core.time, 'sleep'), \
+                     mock.patch.object(core.urllib.request, 'urlopen', return_value=response) as request:
+                    with self.assertRaisesRegex(core.RecoveryError, '2 часа'):
+                        core.download_rootfs(dest, lambda _: None)
+                self.assertFalse(dest.exists())
+                self.assertEqual(part.stat().st_size, offset + 1)
+                self.assertEqual(request.call_count, 1)
+
+    def test_download_deadline_includes_elapsed_transfer_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = [0.0]
+            response = self.Response(b'x', status=200, headers={'Content-Length': '1'})
+            read = response.read
+            def late_read(size):
+                clock[0] = 7201
+                return read(size)
+            response.read1 = late_read
+            response.read = late_read
+            dest = Path(tmp) / core.ROOTFS_NAME
+            with mock.patch.object(core.time, 'monotonic', side_effect=lambda: clock[0]), \
+                 mock.patch.object(core.urllib.request, 'urlopen', return_value=response):
+                with self.assertRaisesRegex(core.RecoveryError, '2 часа'):
+                    core.download_rootfs(dest, lambda _: None)
+            self.assertFalse(dest.exists())
+
+    def test_range_ignored_after_retry_does_not_inflate_speed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = [0.0]
+            first = self.Response(b'a' * 90000, status=200,
+                                  headers={'Content-Length': '100000'}, fail_after=True)
+            second = self.Response(b'x', status=200, headers={'Content-Length': '100000'})
+            first_read, second_read = first.read, second.read
+            def quick_read(size):
+                clock[0] += 1
+                return first_read(size)
+            def slow_read(size):
+                clock[0] += 31
+                return second_read(size)
+            first.read1, second.read1 = quick_read, slow_read
+            responses = [first, second]
+            def request(_request, timeout):
+                return responses.pop(0) if responses else self.Response(
+                    b'', status=200, headers={'Content-Length': '0'})
+            dest = Path(tmp) / core.ROOTFS_NAME
+            with mock.patch.object(core.time, 'monotonic', side_effect=lambda: clock[0]), \
+                 mock.patch.object(core.time, 'sleep'), \
+                 mock.patch.object(core.urllib.request, 'urlopen', side_effect=request) as fetch:
+                with self.assertRaisesRegex(core.RecoveryError, '2 часа'):
+                    core.download_rootfs(dest, lambda _: None)
+            self.assertFalse(dest.exists())
+            self.assertEqual(dest.with_name(dest.name + '.part').read_bytes(), b'x')
+            self.assertEqual(fetch.call_count, 2)
+
     def test_download_resumes_only_with_matching_content_range(self):
         with tempfile.TemporaryDirectory() as tmp:
             fixture = Path(tmp) / "fixture.tbz2"

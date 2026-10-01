@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the exact tested release from the complete GitHub project ZIP."""
+"""Assemble and verify the current release from the complete GitHub project ZIP."""
 from __future__ import annotations
 import argparse
 import contextlib
@@ -15,9 +15,9 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent
-ARCHIVE = 'GEACX1-JP7.2-Recovery-v1.2-Full.tar.gz'
-SHA256 = '248b91f6165b3a24d05f9944f358dd8d4954aee3bd705b0ea78251c3ba3c7bb0'
-SIZE = 3514758836
+ARCHIVE = 'GEACX1-JP7.2-Recovery-v1.3-Full.tar.gz'
+SHA256 = '151e8c645f7d2be8c092c6289e09714df871bd9d1f121c1305d7be4243995d54'
+SIZE = 3518775401
 EXTRA_MANIFEST_SHA256 = '19a7ba2e2da0853068150ec3e85f2655eaaee755426959fcae0464eaa23be471'
 
 class DeliveryError(Exception):
@@ -27,7 +27,7 @@ def load_manifest(root=ROOT):
     data = json.loads((root / 'parts.json').read_text())
     if not isinstance(data, dict) or (data.get('archive'), data.get('sha256'), data.get('size'), data.get('directory')) != (
             ARCHIVE, SHA256, SIZE, 'geacx1-recovery'):
-        raise DeliveryError('parts.json не соответствует проверенному комплекту v1.2.')
+        raise DeliveryError('parts.json не соответствует комплекту v1.3.')
     parts = data.get('parts', [])
     if not isinstance(parts, list) or not parts:
         raise DeliveryError('Некорректный список частей в parts.json.')
@@ -104,7 +104,7 @@ def check_host(destination):
         parent = parent.parent
     fs = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(parent)], text=True).strip()
     if fs != 'ext4':
-        raise DeliveryError(f'Для комплекта выберите папку на ext4; сейчас {fs}. Пример: bash START.sh --destination /путь-на-ext4/geacx1-kit-v1.2')
+        raise DeliveryError(f'Для комплекта выберите папку на ext4; сейчас {fs}. Пример: bash START.sh --destination /путь-на-ext4/geacx1-kit-v1.3')
     if shutil.disk_usage(parent).free < 12 * 1024**3:
         raise DeliveryError('Для объединения и распаковки нужно минимум 12 ГиБ свободно. Для дальнейшей подготовки прошивки мастер потребует ещё 80 ГиБ.')
 
@@ -147,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description='Подготовить полный GEACX1 Recovery из ZIP проекта GitHub.')
     parser.add_argument('--verify-only', action='store_true', help='Только проверить части, без распаковки и запуска.')
     parser.add_argument('--unpack-only', action='store_true', help='Распаковать и проверить, не запускать мастер.')
-    parser.add_argument('--destination', type=Path, default=Path.home() / 'geacx1-kit-v1.2', help='Новая папка на ext4 (по умолчанию ~/geacx1-kit-v1.2).')
+    parser.add_argument('--destination', type=Path, default=Path.home() / 'geacx1-kit-v1.3', help='Новая папка на ext4 (по умолчанию ~/geacx1-kit-v1.3).')
     args = parser.parse_args()
     print('GEACX1 / JetPack 7.2 — полный комплект из проекта GitHub', flush=True)
     manifest = load_manifest()
@@ -155,7 +155,7 @@ def main():
     if args.verify_only:
         combine(ROOT, manifest)
         restore_extras(ROOT, extras)
-        print('Все части и полный архив совпадают с проверенным релизом v1.2.')
+        print('Все части и полный архив совпадают с контрольными суммами v1.3.')
         return
     destination = args.destination.expanduser().resolve()
     check_host(destination)

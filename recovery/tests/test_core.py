@@ -270,6 +270,8 @@ class BundleTests(unittest.TestCase):
             if relative.startswith("tools/") and not (l4t / relative).exists():
                 (l4t / relative).parent.mkdir(parents=True, exist_ok=True)
                 (l4t / relative).write_text("tool")
+        network = Path(__file__).parents[1] / "vendor" / core.VENDOR_NAME / "Linux_for_Tegra/tools/kernel_flash/l4t_network_flash.func"
+        (l4t / "tools/kernel_flash/l4t_network_flash.func").write_bytes(network.read_bytes())
         (l4t / "rootfs").mkdir()
         (l4t / "bootloader").mkdir(exist_ok=True)
         (l4t / "bootloader/extlinux.conf").write_text(

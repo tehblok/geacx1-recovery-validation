@@ -249,11 +249,14 @@ class WizardSafety(unittest.TestCase):
         self.assertFalse(fake.alive)
         self.assertNotIn('Готово', output.getvalue())
 
-    def test_eof_or_second_interrupt_cannot_stop_destructive_flash(self):
-        for interruption in (EOFError(), KeyboardInterrupt()):
-            with self.subTest(type=type(interruption).__name__), \
-                 patch.object(self.w, 'ask', side_effect=interruption):
-                self.assertFalse(self.w.confirm_destructive_stop())
+    def test_second_interrupt_does_not_reset_pending_stop_answer(self):
+        prompt = self.w.StopConfirmation()
+        with patch.object(self.w.sys, 'stdin', Mock()), contextlib.redirect_stdout(io.StringIO()):
+            prompt.request()
+            prompt.buffer = b'STO'
+            prompt.request()
+        self.assertTrue(prompt.active)
+        self.assertEqual(prompt.buffer, b'STO')
 
     def test_checksum_failure_is_saved_in_host_report(self):
         with tempfile.TemporaryDirectory() as d:
@@ -346,7 +349,7 @@ class WizardSafety(unittest.TestCase):
              patch.object(self.w.core, 'require_initrd_network'), \
              patch.object(self.w, 'show_recovery', return_value=device), \
              patch.object(self.w, 'usb_identity', return_value=('1-1','1','2','')), \
-             patch.object(self.w, 'recheck_recovery_identity') as usb_check, \
+             patch.object(self.w, 'usb_preflight') as usb_check, \
              patch.object(self.w.core, 'validate_prepared'), \
              patch.object(self.w.backup, 'build_command', return_value=['official', '-e', 'mmcblk0:nvme0n1', '-r', 'board']), \
              patch.object(self.w.backup, 'isolated_images', context), \
@@ -355,7 +358,7 @@ class WizardSafety(unittest.TestCase):
              patch.object(self.w, 'pause'):
             self.assertTrue(self.w.restore_full_backup(runner))
         self.assertEqual(validate.call_count, 2)
-        usb_check.assert_called_once()
+        usb_check.assert_called_once_with(('1-1', '1', '2', ''), runner)
         runner.run.assert_called_once_with(['official', '-e', 'mmcblk0:nvme0n1', '-r', 'board'], Path('/l4t'))
         self.assertFalse(runner.destructive)
 

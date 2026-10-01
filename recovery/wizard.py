@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import select
 import shlex
 import shutil
 import signal
@@ -20,6 +21,7 @@ BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE / 'lib'))
 import recovery_core as core
 import backup_restore as backup
+import usb_support
 
 LAST_WORK = BASE / 'last-work.json'
 
@@ -190,13 +192,42 @@ def command_description(argv):
     return 'Выполняю необходимую команду'
 
 
-def confirm_destructive_stop():
-    """Only a literal STOP may terminate an active flash command."""
-    try:
-        return ask('Введите STOP для остановки; Enter — продолжать ждать') == 'STOP'
-    except (EOFError, KeyboardInterrupt):
-        print('\nSTOP не введён. Прошивка продолжает работать; дождитесь результата.')
-        return False
+class StopConfirmation:
+    """Read cancellation without ever blocking NVIDIA's stdout drain loop."""
+    def __init__(self):
+        self.active = False
+        self.fd = None
+        self.buffer = b''
+
+    def request(self):
+        print('\nЗапись может быть активна. Для остановки введите STOP и Enter; '
+              'пустой Enter — продолжать. Пока вы отвечаете, команда работает.', flush=True)
+        if not self.active:
+            try:
+                self.fd = sys.stdin.fileno()
+                self.buffer = b''
+                self.active = True
+            except (OSError, ValueError, AttributeError):
+                print('Ввод недоступен. STOP не подтверждён; продолжаю ждать завершения.', flush=True)
+
+    def poll(self):
+        if not self.active:
+            return None
+        try:
+            if not select.select([self.fd], [], [], 0)[0]:
+                return None
+            data = os.read(self.fd, 4096)
+        except (OSError, ValueError):
+            data = b''
+        self.buffer += data
+        if not data or len(self.buffer) > 128:
+            answer = False
+        elif b'\n' in self.buffer:
+            answer = self.buffer.split(b'\n', 1)[0].strip() == b'STOP'
+        else:
+            return None
+        self.active = False
+        return answer
 
 
 class Runner:
@@ -205,6 +236,12 @@ class Runner:
         self.log.parent.mkdir(parents=True, exist_ok=True)
         self.quiet = quiet
         self.destructive = False
+
+    def note(self, message):
+        with self.log.open('a', encoding='utf-8') as log:
+            log.write(message + '\n')
+        if not self.quiet:
+            print(message, flush=True)
 
     def run(self, argv, cwd):
         argv = [str(a) for a in argv]
@@ -224,8 +261,10 @@ class Runner:
             pending = b''
             ticks = 0
             last_notice = start
+            stop_confirmation = StopConfirmation()
+            cancelled = False
             try:
-                while sel.get_map():
+                while sel.get_map() or proc.poll() is None:
                     try:
                         events = sel.select(.15)
                         for key, _ in events:
@@ -238,7 +277,7 @@ class Runner:
                             log.flush()
                             pending += data
                             lines = pending.replace(b'\r', b'\n').split(b'\n')
-                            pending = lines.pop()
+                            pending = lines.pop()[-65536:]
                             if lines:
                                 last = lines[-1].decode('utf-8', errors='replace')
                             elif pending:
@@ -248,7 +287,12 @@ class Runner:
                         if not COLOR and not self.quiet and time.monotonic() - last_notice >= 15:
                             print(f'\n[Команда работает {int(time.monotonic()-start)} с; полный вывод: {self.log}]', flush=True)
                             last_notice = time.monotonic()
-                        if COLOR and not self.quiet:
+                        if stop_confirmation.poll() is True:
+                            # Outside the inner KeyboardInterrupt handler: an
+                            # explicit STOP must terminate, not reopen the prompt.
+                            cancelled = True
+                            break
+                        if COLOR and not self.quiet and not stop_confirmation.active:
                             width = max(30, shutil.get_terminal_size().columns - 20)
                             # Vendor output cannot inject terminal escape/control sequences.
                             safe = ''.join(c for c in last if c.isprintable()).replace('\x1b', '')
@@ -256,11 +300,14 @@ class Runner:
                             ticks += 1
                     except KeyboardInterrupt:
                         if self.destructive:
-                            print('\nЗапись может быть активна. Прерывание оставит устройство без загрузки.')
-                            if not confirm_destructive_stop():
-                                continue
+                            stop_confirmation.request()
+                            continue
                         raise
+                if cancelled:
+                    raise KeyboardInterrupt
                 rc = proc.wait()
+                if stop_confirmation.active:
+                    print('\nКоманда завершилась; запрос STOP больше не действует.', flush=True)
             except BaseException:
                 if proc.poll() is None:
                     os.killpg(proc.pid, signal.SIGTERM)
@@ -284,26 +331,12 @@ class Runner:
 def flash_host_state(runner):
     """Временные изменения только на время flash, с восстановлением в finally."""
     active = subprocess.run(['systemctl', 'is-active', '--quiet', 'udisks2.service'], check=False).returncode == 0
-    controls = []
     try:
         if active:
             runner.run(['systemctl', 'stop', 'udisks2.service'], BASE)
-        for dev in Path('/sys/bus/usb/devices').glob('*'):
-            try:
-                if (dev/'idVendor').read_text().strip() == '0955':
-                    p = dev/'power/control'
-                    old = p.read_text().strip()
-                    p.write_text('on')
-                    controls.append((p, old))
-            except (OSError, UnicodeError):
-                pass
-        yield
+        with usb_support.keep_usb_awake(core.SYS_USB_DEVICES, notify=runner.note):
+            yield
     finally:
-        for p, old in controls:
-            try:
-                p.write_text(old)
-            except OSError:
-                pass
         if active:
             rc = subprocess.run(['systemctl', 'start', 'udisks2.service'], check=False).returncode
             if rc:
@@ -458,6 +491,7 @@ def show_recovery():
             print(f'  NVIDIA, USB-порт {port}, код устройства {product}, {serial}')
         if len(devs) == 1 and devs[0].get('product_id') == '7023':
             print(paint('USB Recovery AGX Orin найден. SKU будет проверен по EEPROM перед записью.', '32'))
+            print(usb_support.describe_connection(devs[0]['sysfs']))
             return devs[0]
         print('Нужно ровно одно AGX Orin в Recovery (0955:7023).')
         if ask('Enter — проверить снова; 0 — назад') == '0':
@@ -580,6 +614,7 @@ def flash_wizard(l4t, runner, fixed_mode=None):
     runner.destructive = True
     try:
         with core.preserve_prepared_initrd(l4t), flash_host_state(runner):
+            usb_preflight(identity, runner)
             runner.run(command, l4t)
     finally:
         runner.destructive = False
@@ -734,6 +769,18 @@ def recheck_recovery_identity(identity):
         raise core.RecoveryError('Подтверждённое USB-устройство отключалось или было заменено.')
 
 
+def usb_preflight(identity, runner, samples=7, interval=0.5):
+    runner.note(usb_support.describe_connection(identity[0]))
+    runner.note('USB: проверяю стабильность подключения перед запуском. На плату ещё ничего не записывается.')
+    for index in range(samples):
+        if index:
+            time.sleep(interval)
+        recheck_recovery_identity(identity)
+    runner.note('USB: за время предварительной проверки переподключений не обнаружено. '
+                'Не закрывайте крышку ноутбука и не отключайте питание/кабель. '
+                'Лимит скачивания 2 часа не ограничивает время прошивки.')
+
+
 def create_full_backup(runner):
     require_root()
     l4t = backup_prepared_path(runner)
@@ -779,7 +826,7 @@ def create_full_backup(runner):
     core.validate_prepared(l4t)
     with backup.isolated_images(l4t) as images:
         with core.preserve_prepared_initrd(l4t), backup_host_state(runner):
-            recheck_recovery_identity(identity)
+            usb_preflight(identity, runner)
             runner.run(command, l4t)
         run_with_status('Проверяю каждый раздел и создаю криптографический манифест…',
                         lambda: backup.export_snapshot(images, destination, scope))
@@ -829,7 +876,7 @@ def restore_full_backup(runner):
     core.validate_prepared(l4t)
     with backup.isolated_images(l4t, snapshot):
         with core.preserve_prepared_initrd(l4t), backup_host_state(runner):
-            recheck_recovery_identity(identity)
+            usb_preflight(identity, runner)
             runner.destructive = True
             try:
                 runner.run(command, l4t)

@@ -42,6 +42,8 @@ KERNEL_VERSION = "6.8.12-1021-tegra"
 BOARD_NAME = "geacx1-32gb-jp72"
 QSPI_BOARD_NAME = BOARD_NAME + "-qspi"
 SYS_USB_DEVICES = Path("/sys/bus/usb/devices")
+NETWORK_FLASH_SHA256 = "b7f4f2c085cbd4f91f881768d205f656e7bcbeed01dd0d3a787dc880d4ac0063"
+NETWORK_WAIT_SHA256 = "998c954d400e246a1d9472faaf03d562aec4348fffee3d6ef979938a9e8270b6"
 
 REQUIRED_L4T = (
     "nv_tegra/nv_tegra_release",
@@ -803,6 +805,9 @@ def _write_marker(l4t: Path) -> None:
 def validate_prepared(l4t: Path) -> dict:
     l4t = Path(l4t)
     release = _release(l4t)
+    network = l4t / "tools/kernel_flash/l4t_network_flash.func"
+    if not network.is_file() or _sha256(network) != NETWORK_WAIT_SHA256:
+        raise RecoveryError("Рабочая копия не содержит проверенное ожидание USB-сети v1.4. Выполните новую подготовку.")
     marker_path = l4t / ".geacx1-prepared.json"
     try:
         marker = json.loads(marker_path.read_text())
@@ -875,6 +880,23 @@ def preserve_prepared_initrd(l4t: Path):
                 shutil.rmtree(saved)
     # Only on normal completion: preserve the original command error otherwise.
     validate_prepared(l4t)
+
+
+def extend_initrd_network_wait(l4t: Path) -> None:
+    """Allow a slow initrd USB network to appear; never retry a flash command.
+
+    R39.2's -t option is not parsed by every wrapper. Change only the exact
+    known function in the disposable work copy, keeping explicit timeouts.
+    """
+    path = l4t / "tools/kernel_flash/l4t_network_flash.func"
+    if not path.is_file() or _sha256(path) != NETWORK_FLASH_SHA256:
+        raise RecoveryError("Неизвестная версия l4t_network_flash.func; ожидание USB-сети не изменено.")
+    old = "wait_for_flash_ssh()\n{\n\tmaxcount=${timeout:-60}\n"
+    new = "wait_for_flash_ssh()\n{\n\tmaxcount=${timeout:-300}\n"
+    text = path.read_text()
+    if text.count(old) != 1:
+        raise RecoveryError("Не найден точный блок ожидания USB-сети; подготовка остановлена.")
+    path.write_text(text.replace(old, new, 1))
 
 
 def prepare(vendor: Path, rootfs: Path, work: Path,
@@ -956,6 +978,8 @@ def prepare(vendor: Path, rootfs: Path, work: Path,
     (l4t / f"{BOARD_NAME}.conf").write_text(_BOARD_GUARD)
     (l4t / f"{QSPI_BOARD_NAME}.conf").write_text(_QSPI_GUARD)
     backup_restore.harden_prepared_tools(l4t)
+    progress("Увеличение ожидания появления USB-сети initrd для медленного подключения…")
+    extend_initrd_network_wait(l4t)
     progress("Пересборка initrd после установки полного дерева модулей…")
     run(["./tools/l4t_update_initrd.sh"], l4t)
     _copy_file(l4t / "bootloader/l4t_initrd.img", target_rootfs / "boot/initrd")

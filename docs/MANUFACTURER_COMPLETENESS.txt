@@ -1,0 +1,1 @@
+PASS: all 3263 original manufacturer files/links included: frozen v1.2 plus 3 supplemental original DEBs. Only macOS metadata excluded.

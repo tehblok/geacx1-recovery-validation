@@ -1,0 +1,48 @@
+[
+  {
+    "name": "tztek-jetson-firmware-cpld-geacx1-sc-v1.2.deb",
+    "size": 280604,
+    "sha256": "170ac9e97407103b4efb848f46ac1d926a8f29c7a7f6ef9e0a97ebb8594f595f",
+    "parts": [
+      {
+        "name": "tztek-jetson-firmware-cpld-geacx1-sc-v1.2.deb",
+        "size": 280604,
+        "sha256": "170ac9e97407103b4efb848f46ac1d926a8f29c7a7f6ef9e0a97ebb8594f595f"
+      }
+    ]
+  },
+  {
+    "name": "tztek-jetson-firmware-kernel-dtb-510jx0-32g-r3.0-jp6.0.0-v6.0.2.deb",
+    "size": 123168300,
+    "sha256": "2ba25574e33da8aa165abb02dde02f2e0e7666afb28fef0bdec0ecdcf213869b",
+    "parts": [
+      {
+        "name": "tztek-jetson-firmware-kernel-dtb-510jx0-32g-r3.0-jp6.0.0-v6.0.2.deb.001",
+        "size": 50000000,
+        "sha256": "aefb97005a4d8549388f7b06938819245e4fa0b792bc56dc9853bbd58f82551d"
+      },
+      {
+        "name": "tztek-jetson-firmware-kernel-dtb-510jx0-32g-r3.0-jp6.0.0-v6.0.2.deb.002",
+        "size": 50000000,
+        "sha256": "8b439f7c7031376cd1a4ad57ac6aaaed9c0f696beaa236ef9d16af5e39236b55"
+      },
+      {
+        "name": "tztek-jetson-firmware-kernel-dtb-510jx0-32g-r3.0-jp6.0.0-v6.0.2.deb.003",
+        "size": 23168300,
+        "sha256": "2589fddb4fc1c67b84face00a80a5d9e9323fced96f8620027805cce28d7bd56"
+      }
+    ]
+  },
+  {
+    "name": "tztek-jetson-firmware-kernel-dtb-545t-1.3-nx-jp4.4-v2.4.6.deb",
+    "size": 31779368,
+    "sha256": "6a9afe81ac6143ad712015b7665750f6efdc77104249cd77bc4dcfe0008d2570",
+    "parts": [
+      {
+        "name": "tztek-jetson-firmware-kernel-dtb-545t-1.3-nx-jp4.4-v2.4.6.deb",
+        "size": 31779368,
+        "sha256": "6a9afe81ac6143ad712015b7665750f6efdc77104249cd77bc4dcfe0008d2570"
+      }
+    ]
+  }
+]

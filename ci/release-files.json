@@ -1,0 +1,22 @@
+{
+  "recovery/wizard.py": "8520c84645af64dcbb9094ec816ef14c2692ce32421d7ec092d50d187b6cf499",
+  "recovery/lib/recovery_core.py": "8b6dcf21cbf458bf00aa8421b7fa7e8bd1ef6d0e6eb0f004c893c1d7f14cce10",
+  "recovery/lib/backup_restore.py": "e33ac4f89bac8ba59f1b33342810ec211e0b11f7e531f139ea1b47d7cdb2264f",
+  "recovery/START.sh": "6e70927b1b6ec5e6e15303e2ba2f396fd6a8a85dda78fce2626934ae711f6708",
+  "recovery/POSTCHECK.sh": "23a91932d9173299c6c224f09c8a65cab9b6ab06b9e530092d8db8c8476d7504",
+  "recovery/tests/test_backup_restore.py": "0aa074a1e8afe7d41170b28f836a2b843af6a37db4fde694714fc4b8eb35c016",
+  "recovery/tests/test_core.py": "d51028856995704213d8b129c81ed268390fe952d8f7f748ef28ef73232dee68",
+  "recovery/tests/test_wizard.py": "2c1de6347aef7eebadf70a0d66801f2412c47a324fee958e4fe4fd92e3b6d404",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/l4t_flash_prerequisites.sh": "36237121ab690c8a738dd2d6ac255562f39b23baa11c142257dd92cf92719ef9",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/backup_restore/nvbackup_partitions.sh": "0fd9307a46594f41eac27c8f683cf429ed0016264b6a3e1027270a30cfe88cf8",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/backup_restore/nvrestore_partitions.sh": "ae39bc6122a9de54f9c7938e3511bb12c0cf20f6cbb92d851fd7febfffeec127",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/Tegra_Software_License_Agreement-Tegra-Linux.txt": "828f46b4982622a4558a96f21f531dc5cf36d1d942255cd886be56bad3797aa4",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/tegrarcm_v2": "0a221ac986ee8a1e167c727f972053f27eb17a599767e1cc2927313dbabe2a6d",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/tegrahost_v2": "49c1faa8311ea57933ec197a5b442bea8a07824ccfd40875ee4244f7219ffcaa",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/tegrabct_v2": "4b03fcc272c9f07ba854a12260f6e3c4f3144990b88afecabecf82d98584381f",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/tegraparser_v2": "2b5ec7c1bfa8ffad7d97957c98a449141fc7ed0aa6989142d3e53ed73b699f36",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/tegradevflash_v2": "061bc4f9c37322074424469d24852ed4662244378e03c803d533cdf646bd36ff",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/mksparse": "b72219cd7c2b775db41df893a3ab84694097bb421497bb14b718285e5728a6ad",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/mkbootimg": "29a52203c8ade2871ae11b756b842e3e8f817cf4bf79f0ff7b03e116cfb81c8c",
+  "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/bootloader/fiptool": "923a1ab8ff747549483fa7218c54735ff9977d7046647e0cd1a6bdcbd4988edc"
+}

@@ -1,0 +1,36 @@
+name: Validate GEACX1 v1.2 on Ubuntu 24.04 x86_64
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-ubuntu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test in clean Ubuntu 24.04 container on native x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          uname -a | tee reports/runner.txt
+          df -h >> reports/runner.txt
+          docker pull --platform linux/amd64 ubuntu:24.04
+          docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' >> reports/runner.txt
+          docker run --rm --platform linux/amd64 \
+            --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+            --mount "type=bind,source=$PWD/reports,target=/reports" \
+            ubuntu:24.04 bash /workspace/ci/run-clean-ubuntu.sh
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: geacx1-ubuntu24-evidence
+          path: reports/
+          retention-days: 7
+          if-no-files-found: error

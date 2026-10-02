@@ -22,6 +22,8 @@ sys.path.insert(0, str(BASE / 'lib'))
 import recovery_core as core
 import backup_restore as backup
 import usb_support
+import reusable_images as reusable
+import generated_cleanup
 
 LAST_WORK = BASE / 'last-work.json'
 
@@ -392,6 +394,9 @@ def exclusive_session():
 
 def host_check_action(check):
     """Return one concrete, non-destructive next step for a failed host check."""
+    if check.get('name') == 'Свободное место' and 'required_bytes' in check:
+        needed = check['required_bytes'] / 1024**3
+        return f'Нужно свободно {needed:.1f} ГиБ. Меню 9 показывает ненужные результаты сборки для очистки.'
     actions = {
         'Linux': 'Запустите комплект на обычном компьютере с Linux; прошивка из macOS или Windows не поддерживается.',
         'Ubuntu': 'Загрузите на компьютере нативную Ubuntu 24.04 или 22.04 и повторите проверку.',
@@ -404,8 +409,8 @@ def host_check_action(check):
     return actions.get(check.get('name'), 'Исправьте указанное условие и повторите пункт 3 «Проверить компьютер и комплект».')
 
 
-def print_checks(work):
-    checks = core.host_checks(work)
+def print_checks(work, min_free_bytes=80 * 1024**3):
+    checks = core.host_checks(work, min_free_bytes=min_free_bytes)
     for c in checks:
         print(f'  {paint("✓", "32") if c["ok"] else paint("✗", "31")} {c["name"]}: {c["detail"]}')
         if not c['ok']:
@@ -559,7 +564,7 @@ def prepare_wizard(vendor, runner, pause_after=True, simple=False):
     return l4t
 
 
-def flash_wizard(l4t, runner, fixed_mode=None):
+def flash_wizard(l4t, runner, fixed_mode=None, reuse_images=False):
     require_root()
     if l4t is None:
         saved = LAST_WORK
@@ -573,8 +578,16 @@ def flash_wizard(l4t, runner, fixed_mode=None):
         if not value:
             return False
         l4t = Path(value).expanduser().absolute()
-    # Space requirement applies to fresh image generation, even on resume.
-    if not print_checks(l4t):
+    minimum = 80 * 1024**3
+    if reuse_images:
+        if fixed_mode not in ('emmc', 'nvme'):
+            raise core.RecoveryError('Для готового образа выберите eMMC или NVMe.')
+        metadata = run_with_status('Проверяю SHA-256 готовых образов…',
+                                   lambda: reusable.validate(l4t, fixed_mode))
+        minimum = reusable.required_free_bytes(l4t, fixed_mode)
+        print('Готовый образ проверен. Сохранён:', metadata['created_at'])
+        print('Будет записано прежнее содержимое образа. Для включения новых изменений rootfs нужна обычная сборка.')
+    if not print_checks(l4t, min_free_bytes=minimum):
         raise core.RecoveryError('Проверки хоста/рабочей папки не пройдены.')
     require_runtime_tools()
     core.validate_prepared(l4t)
@@ -593,7 +606,7 @@ def flash_wizard(l4t, runner, fixed_mode=None):
         return False
     identity = usb_identity(selected)
     screen('Последняя проверка перед записью', 'Автоматического старта и подтверждения по Enter нет')
-    command = core.build_command(l4t, mode)
+    command = reusable.build_command(mode) if reuse_images else core.build_command(l4t, mode)
     command[1:1] = ['--usb-instance', Path(selected['sysfs']).name]
     print('Режим:',MODES[mode][0])
     print('USB:', Path(selected['sysfs']).name, 'bus/device:', identity[1], identity[2])
@@ -611,13 +624,30 @@ def flash_wizard(l4t, runner, fixed_mode=None):
     if usb_identity(devs[0]) != identity:
         raise core.RecoveryError('Подтверждённое USB-устройство отключалось или было заменено. Повторите подтверждение.')
     core.validate_prepared(l4t)
+    if reuse_images:
+        run_with_status('Повторно проверяю образ перед записью…', lambda: reusable.validate(l4t, mode))
+    else:
+        reusable.invalidate(l4t)
     runner.destructive = True
     try:
         with core.preserve_prepared_initrd(l4t), flash_host_state(runner):
             usb_preflight(identity, runner)
+            reusable.isolate_board_spec(l4t)
             runner.run(command, l4t)
     finally:
         runner.destructive = False
+    if mode in ('emmc', 'nvme'):
+        try:
+            if reuse_images:
+                run_with_status('Проверяю сохранность готового образа после записи…',
+                                lambda: reusable.refresh_after_repeat(l4t, mode))
+            else:
+                run_with_status('Сохраняю контрольные суммы для повторной прошивки…',
+                                lambda: reusable.record_success(l4t, mode))
+            runner.note('READY_IMAGE: ' + mode + ' ' + str(l4t))
+        except (core.RecoveryError, OSError, ValueError) as exc:
+            runner.note('READY_IMAGE_UNAVAILABLE: ' + str(exc))
+            print('NVIDIA завершила запись, но готовый образ для повтора не сохранён:', exc)
     screen('Утилита прошивки завершилась без ошибки')
     print(paint('Следующий шаг — проверить загрузку самого GEACX1.', '32'))
     if mode == 'qspi':
@@ -714,6 +744,56 @@ def continue_prepared(runner):
     if choose('Продолжить?', [('1', 'Перейти к подключению платы и записи'), ('0', 'Назад')]) != '1':
         return False
     return flash_prepared_target(l4t, runner, target)
+
+
+def repeat_ready_images(runner):
+    l4t = saved_work_path()
+    screen('Повторить запись готового образа')
+    print('Используется образ последней успешной операции, зарегистрированный этой версией мастера.\n'
+          'Ядро и Ubuntu заново не собираются. NVIDIA подготовит загрузчики и проверит модель модуля.\n'
+          'Старые образы без записи проверки и образы другого накопителя не принимаются.\n'
+          'Если готового образа ещё нет, выполните обычную запись через пункт 2 один раз.')
+    mode = choose('Какой готовый образ записать?', [('1', 'eMMC'), ('2', 'NVMe'), ('0', 'Назад')])
+    if mode == '0':
+        return False
+    return flash_wizard(l4t, runner, fixed_mode={'1': 'emmc', '2': 'nvme'}[mode], reuse_images=True)
+
+
+def cleanup_generated_images(runner):
+    require_root()
+    l4t = saved_work_path()
+    protected = set()
+    # Keep NVMe's raw input even if its checksum has failed: cleanup must not
+    # silently make an existing repeat package unusable.
+    receipt = l4t / reusable.RECEIPT
+    if receipt.exists() or receipt.is_symlink():
+        try:
+            data = json.loads(receipt.read_text())
+            if not isinstance(data, dict) or data.get('mode') != 'emmc':
+                protected = reusable.protected_cleanup_paths('nvme')
+        except (OSError, ValueError):
+            protected = reusable.protected_cleanup_paths('nvme')
+    plan = generated_cleanup.plan_cleanup(l4t, protected_paths=protected)
+    screen('Очистка результатов сборки на компьютере')
+    print('Рабочая сборка:', l4t)
+    for item in plan['entries']:
+        print(f"  {item['path']}: занято {item['allocated_bytes'] / 1024**3:.2f} ГиБ "
+              f"(видимый размер {item['size'] / 1024**3:.2f} ГиБ)")
+    if protected:
+        print('system.img.raw сохранён: он нужен для повторной записи NVMe либо состояние образа не подтверждено.')
+    if not plan['entries']:
+        print('В этой сборке нет ненужных промежуточных образов для удаления.')
+        pause()
+        return False
+    print(f"Можно освободить до {plan['allocated_bytes'] / 1024**3:.2f} ГиБ. Исходники, система, журналы и system.img сохраняются.")
+    if ask('Для удаления перечисленных файлов введите CLEAN GENERATED') != 'CLEAN GENERATED':
+        print('Очистка отменена.')
+        return False
+    result = generated_cleanup.execute_cleanup(l4t, plan)
+    runner.note('GENERATED_CLEANUP: ' + json.dumps(result, ensure_ascii=False))
+    print('Перечисленные промежуточные файлы удалены.')
+    pause()
+    return True
 
 
 def _validate_backup_prepared(l4t):
@@ -1038,6 +1118,8 @@ def main():
             ('5','Инструкция и помощь'),
             ('6','Дополнительные режимы'),
             ('7','Полная резервная копия / восстановление'),
+            ('8','Повторить прошивку готовым проверенным образом'),
+            ('9','Освободить место: ненужные результаты сборки'),
             ('0','Выход')])
         try:
             if option == '0':
@@ -1058,7 +1140,12 @@ def main():
                 advanced_menu(vendor, runner)
             elif option == '7':
                 backup_menu(runner)
+            elif option == '8':
+                repeat_ready_images(runner)
+            elif option == '9':
+                cleanup_generated_images(runner)
         except (core.RecoveryError,OSError,ValueError) as exc:
+            runner.note('Операция остановлена: ' + str(exc))
             print(paint('\nОперация остановлена: '+str(exc),'1;31'))
             tail = ''
             if runner.log.exists():

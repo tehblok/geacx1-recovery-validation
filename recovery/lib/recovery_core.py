@@ -436,7 +436,7 @@ def _mount_fstype(path: Path) -> Optional[str]:
         return None
 
 
-def host_checks(work: Path) -> List[dict]:
+def host_checks(work: Path, min_free_bytes: int = 80 * 1024 ** 3) -> List[dict]:
     work = Path(work)
     try:
         os_release = _parse_os_release(Path("/etc/os-release").read_bytes())
@@ -467,7 +467,9 @@ def host_checks(work: Path) -> List[dict]:
         {"name": "Нативный хост", "ok": not virtualized, "detail": "WSL/Docker не поддерживаются" if virtualized else "нативная система"},
         {"name": "Файловая система", "ok": fstype == "ext4", "detail": fstype or "не определена"},
         {"name": "Безопасный путь", "ok": safe_path, "detail": str(work)},
-        {"name": "Свободное место", "ok": free >= 80 * 1024 ** 3, "detail": f"{free / 1024 ** 3:.1f} GiB"},
+        {"name": "Свободное место", "ok": free >= min_free_bytes,
+         "required_bytes": min_free_bytes,
+         "detail": f"{free / 1024 ** 3:.1f} GiB; нужно {min_free_bytes / 1024 ** 3:.1f} GiB"},
     ]
 
 

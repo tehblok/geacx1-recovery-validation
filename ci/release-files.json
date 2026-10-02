@@ -1,12 +1,18 @@
 {
   "recovery/POSTCHECK.sh": "8aa3e2af7542d2415f471ce3c2f037d09c13aac6e7009f0eab7970cf34ddd603",
   "recovery/START.sh": "6e70927b1b6ec5e6e15303e2ba2f396fd6a8a85dda78fce2626934ae711f6708",
+  "recovery/docs/REPEAT_FLASH_RU.md": "12eb12f79b799cca6371d55849708b945e534c9e66a317ad1f684c80856a817b",
   "recovery/lib/backup_restore.py": "e33ac4f89bac8ba59f1b33342810ec211e0b11f7e531f139ea1b47d7cdb2264f",
-  "recovery/lib/recovery_core.py": "040e249a7df7949fc78b1c2f6e627cb217e5e2f3d331e7d974fc68760d72575e",
+  "recovery/lib/generated_cleanup.py": "9059dd3eb8d6c71254128c64f865a0eb5e85206b081acf46b934ab479964c22a",
+  "recovery/lib/recovery_core.py": "d140fc6fcc260a96c1e7247f4b524eb30b165780333593c313e731864d69e6d1",
+  "recovery/lib/reusable_images.py": "6c8251da5adf5357e5d6d589df91b2fd3ae736566b99b386a32551c4485f443d",
   "recovery/lib/usb_support.py": "bdb0ef599969f6ccc367dd52da212b66ad4db81f48946f835cef14590918c2cb",
   "recovery/tests/test_backup_restore.py": "0aa074a1e8afe7d41170b28f836a2b843af6a37db4fde694714fc4b8eb35c016",
   "recovery/tests/test_core.py": "d268f640a60e393c15601c6329e7625d4d89fc8332eef277a6ed0d1b5f825ca5",
+  "recovery/tests/test_generated_cleanup.py": "5860056f1c7c44ef5ec4fc67f4045c369797033afea2a25834ca7b39d083824a",
   "recovery/tests/test_network_wait.py": "856c41942bd8480465e5d9ff3f0d62544ca9081bfa2bb35b6aa8357b9753bb26",
+  "recovery/tests/test_repeat_wizard.py": "234e84bd97f8b9bb30666c05da0614c94eb45592fd8011d4b0a5bed002c88c88",
+  "recovery/tests/test_reusable_images.py": "783ebb77e7b2e7bce00df989d27fc0eaf4d2c82282f60a2a4072956dfd86a0eb",
   "recovery/tests/test_runner_io.py": "a08fc402d54a5b198de322a8c934bd4d001a12286d2b2bdda6866516d3097b58",
   "recovery/tests/test_usb_support.py": "66c1a40444cdaf4f2ba44d8a46bb55e8acc074e2c2a9b5dd5c14024cf3affd8c",
   "recovery/tests/test_wizard.py": "fb0f357716333dc7e28f1acc96b1449a60f65be9383ce4e84d4797408039b453",
@@ -23,5 +29,5 @@
   "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/backup_restore/nvrestore_partitions.sh": "ae39bc6122a9de54f9c7938e3511bb12c0cf20f6cbb92d851fd7febfffeec127",
   "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/kernel_flash/l4t_network_flash.func": "b7f4f2c085cbd4f91f881768d205f656e7bcbeed01dd0d3a787dc880d4ac0063",
   "recovery/vendor/flashtool_jp7.2_GA_r1.0_20260722/Linux_for_Tegra/tools/l4t_flash_prerequisites.sh": "36237121ab690c8a738dd2d6ac255562f39b23baa11c142257dd92cf92719ef9",
-  "recovery/wizard.py": "3b2eb33b4a297327de181102de8bebe52101279be14ba99ac551d54ffed5148e"
+  "recovery/wizard.py": "b42286656c6157744e6271899694776a52959c9ea9dcc9362918d9b3c97327bd"
 }

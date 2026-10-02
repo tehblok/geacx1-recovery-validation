@@ -5,6 +5,7 @@ export DEBIAN_FRONTEND=noninteractive REPORTS=/reports
 apt-get update
 apt-get install -y --no-install-recommends sudo python3 ca-certificates lsb-release
 /usr/bin/python3 ci/validate.py identity | tee /reports/identity.log
+/usr/bin/python3 ci/build_runtime_update.py --check
 /usr/bin/python3 -m unittest discover -s recovery/tests -v 2>&1 | tee /reports/unit-tests.log
 /usr/bin/python3 -m unittest discover -s ci -p 'test_*.py' -v 2>&1 | tee /reports/delivery-tests.log
 runuser -u nobody -- /usr/bin/python3 ci/verify_delivery.py 2>&1 | tee /reports/full-payload.log

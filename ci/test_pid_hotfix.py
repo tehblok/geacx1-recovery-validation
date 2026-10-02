@@ -36,7 +36,8 @@ class HotfixTests(unittest.TestCase):
                 self.assertEqual((root/'last-work.json').read_bytes(),last)
                 if version=='v1.4':
                     for name in old:
-                        self.assertEqual((root/name).read_bytes(),(ROOT/'recovery'/name).read_bytes())
+                        known = next(item for item in fix.KNOWN[name] if item[0]=='v1.4')
+                        self.assertEqual(fix.sha((root/name).read_bytes()),known[2])
                 self.assertIsNone(fix.apply_fix(root))
 
     def test_unknown_source_rejected_before_any_mutation(self):

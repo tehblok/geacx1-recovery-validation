@@ -118,6 +118,33 @@ class RuntimeUpdateTests(unittest.TestCase):
                 self.update.apply_update(root)
             self.assertEqual((outside / 'recovery_core.py').read_bytes(), before)
 
+    def test_power_loss_after_replacing_old_or_adding_new_file_can_resume(self):
+        for name in ('lib/recovery_core.py', 'docs/REPEAT_FLASH_RU.md'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); self.fixture(root)
+                (root / name).write_bytes((ROOT / 'recovery' / name).read_bytes())
+                self.update.apply_update(root)
+                self.assertEqual((root / 'wizard.py').read_bytes(), (ROOT / 'recovery/wizard.py').read_bytes())
+                self.assertIsNone(self.update.apply_update(root))
+
+    def test_failed_rollback_continues_and_next_update_recovers_known_partial_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); self.fixture(root)
+            replace = self.update.replace_file
+            count = 0
+            def failing(*args):
+                nonlocal count
+                count += 1
+                if count in (4, 5):
+                    raise OSError('simulated persistent storage failure')
+                return replace(*args)
+            with patch.object(self.update, 'replace_file', side_effect=failing):
+                with self.assertRaises(OSError):
+                    self.update.apply_update(root)
+            self.assertFalse((root / 'lib/generated_cleanup.py').exists())
+            self.update.apply_update(root)
+            self.assertIsNone(self.update.apply_update(root))
+
 
 if __name__ == '__main__':
     unittest.main()

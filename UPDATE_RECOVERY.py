@@ -79,14 +79,16 @@ def apply_update(kit, keep_backup=True):
             compile(after, name, 'exec')
         pattern = re.compile(r'(?m)^([0-9a-fA-F]{64})([ \t]+[ *])' + re.escape(name) + r'$')
         entries = list(pattern.finditer(text))
-        if before is None:
-            if entries:
-                raise ValueError('Отсутствует файл, уже включённый в SHA256SUMS: ' + name)
+        if not entries and None in record['before']:
+            # A power loss can leave a newly added file before the manifest.
             if text and not text.endswith('\n'):
                 text += '\n'
             text += record['sha256'] + '  ' + name + '\n'
         else:
-            if len(entries) != 1 or entries[0].group(1).lower() != old_hash:
+            known_hashes = [*record['before'], record['sha256']]
+            # Reconcile only known old/new combinations after an interrupted
+            # atomic per-file replacement. Unknown contents still fail above.
+            if len(entries) != 1 or entries[0].group(1).lower() not in known_hashes:
                 raise ValueError('SHA256SUMS не соответствует файлу: ' + name)
             text = pattern.sub(lambda m: record['sha256'] + m.group(2) + name, text)
         if before != after:
@@ -107,12 +109,19 @@ def apply_update(kit, keep_backup=True):
         for path, before, after, info in changes:
             replace_file(path, after, info)
             committed.append((path, before, info))
-    except BaseException:
+    except BaseException as original_error:
+        rollback_errors = []
         for path, before, info in reversed(committed):
-            if before is None:
-                path.unlink()
-            else:
-                replace_file(path, before, info)
+            try:
+                if before is None:
+                    path.unlink()
+                else:
+                    replace_file(path, before, info)
+            except OSError as error:
+                rollback_errors.append(str(path) + ': ' + str(error))
+        if rollback_errors:
+            raise OSError('Откат завершён частично. После устранения ошибки диска повторите обновление. '
+                          'Исходники: ' + str(backup) + '. ' + '; '.join(rollback_errors)) from original_error
         raise
     return backup
 

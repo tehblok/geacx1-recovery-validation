@@ -42,6 +42,9 @@ KERNEL_VERSION = "6.8.12-1021-tegra"
 BOARD_NAME = "geacx1-32gb-jp72"
 QSPI_BOARD_NAME = BOARD_NAME + "-qspi"
 SYS_USB_DEVICES = Path("/sys/bus/usb/devices")
+# NVIDIA Quick Start: 7223 is production P3701-0004 (32 GB); 7023 is
+# the broader AGX Orin recovery family. EEPROM remains the final SKU gate.
+AGX_ORIN_RECOVERY_PIDS = frozenset(("7023", "7223"))
 NETWORK_FLASH_SHA256 = "b7f4f2c085cbd4f91f881768d205f656e7bcbeed01dd0d3a787dc880d4ac0063"
 NETWORK_WAIT_SHA256 = "998c954d400e246a1d9472faaf03d562aec4348fffee3d6ef979938a9e8270b6"
 
@@ -487,7 +490,7 @@ def recovery_devices() -> List[dict]:
                 return ""
         devices.append({
             "sysfs": str(entry), "vendor_id": vendor, "product_id": product_id,
-            "supported": product_id == "7023", "family": "AGX Orin" if product_id == "7023" else "NVIDIA (неизвестная модель)",
+            "supported": product_id in AGX_ORIN_RECOVERY_PIDS, "family": "AGX Orin" if product_id in AGX_ORIN_RECOVERY_PIDS else "NVIDIA (неизвестная модель)",
             "product": optional("product"), "serial": optional("serial"),
             "detail": "USB PID подтверждает только recovery-семейство; SKU 32 GB проверит EEPROM при прошивке.",
         })

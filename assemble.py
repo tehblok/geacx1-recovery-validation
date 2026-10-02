@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from FIX_RECOVERY_7223 import apply_fix
 
 ROOT = Path(__file__).resolve().parent
 ARCHIVE = 'GEACX1-JP7.2-Recovery-v1.4-Full.tar.gz'
@@ -135,6 +136,9 @@ def unpack(root, manifest, destination, extras=None):
         links = json.loads((kit / 'docs/SYMLINKS.json').read_text())
         if any(not (kit / name).is_symlink() or os.readlink(kit / name) != target for name, target in links.items()):
             raise DeliveryError('При распаковке нарушены символические ссылки. Мастер не запущен.')
+        if manifest['archive'] == ARCHIVE:
+            print('\nИсправляю распознавание AGX Orin 32 GB (Recovery 0955:7223).', flush=True)
+            apply_fix(kit, keep_backup=False)
         if extras is not None:
             print('\nСохраняю дополнительные исходные пакеты производителя. Они не устанавливаются.', flush=True)
             restore_extras(root, extras, staging)

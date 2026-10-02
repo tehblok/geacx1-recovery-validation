@@ -489,11 +489,11 @@ def show_recovery():
             product = d.get('product_id', 'неизвестно')
             serial = d.get('serial') or 'нет серийного номера в Recovery'
             print(f'  NVIDIA, USB-порт {port}, код устройства {product}, {serial}')
-        if len(devs) == 1 and devs[0].get('product_id') == '7023':
+        if len(devs) == 1 and devs[0].get('product_id') in core.AGX_ORIN_RECOVERY_PIDS:
             print(paint('USB Recovery AGX Orin найден. SKU будет проверен по EEPROM перед записью.', '32'))
             print(usb_support.describe_connection(devs[0]['sysfs']))
             return devs[0]
-        print('Нужно ровно одно AGX Orin в Recovery (0955:7023).')
+        print('Нужно ровно одно AGX Orin в Recovery (0955:7223 или 0955:7023). SKU 3701/0004 проверит EEPROM.')
         if ask('Enter — проверить снова; 0 — назад') == '0':
             return False
 
@@ -606,7 +606,7 @@ def flash_wizard(l4t, runner, fixed_mode=None):
         return False
     # Recheck after confirmation; never continue with a changed USB topology.
     devs = core.recovery_devices()
-    if len(devs) != 1 or devs[0].get('product_id') != '7023':
+    if len(devs) != 1 or devs[0].get('product_id') not in core.AGX_ORIN_RECOVERY_PIDS:
         raise core.RecoveryError('USB состав изменился. Вернитесь в Recovery и повторите выбор.')
     if usb_identity(devs[0]) != identity:
         raise core.RecoveryError('Подтверждённое USB-устройство отключалось или было заменено. Повторите подтверждение.')
@@ -763,7 +763,7 @@ def select_backup_scope():
 
 def recheck_recovery_identity(identity):
     devs = core.recovery_devices()
-    if len(devs) != 1 or devs[0].get('product_id') != '7023':
+    if len(devs) != 1 or devs[0].get('product_id') not in core.AGX_ORIN_RECOVERY_PIDS:
         raise core.RecoveryError('USB состав изменился. Вернитесь в Recovery и повторите выбор.')
     if usb_identity(devs[0]) != identity:
         raise core.RecoveryError('Подтверждённое USB-устройство отключалось или было заменено.')
